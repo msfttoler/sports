@@ -1,0 +1,240 @@
+# Repository Settings Configuration
+# This file documents the recommended repository settings for the Sports Prediction System
+
+repository:
+  name: "sports-prediction-system"
+  description: "Azure Functions-based sports data aggregation and ML prediction system with Cosmos DB integration"
+  homepage: "https://your-domain.com"
+  topics:
+    - azure-functions
+    - python
+    - machine-learning
+    - sports-prediction
+    - cosmos-db
+    - terraform
+    - ci-cd
+    - playwright-testing
+
+  # Repository settings
+  has_issues: true
+  has_projects: true
+  has_wiki: true
+  has_downloads: false
+  default_branch: "main"
+  allow_squash_merge: true
+  allow_merge_commit: false
+  allow_rebase_merge: true
+  delete_branch_on_merge: true
+
+# Branch Protection Rules
+branches:
+  - name: "main"
+    protection:
+      required_status_checks:
+        strict: true
+        contexts:
+          - "Code Quality & Security"
+          - "Infrastructure Validation"
+          - "Build Application"
+          - "End-to-End Testing"
+          - "Security Testing"
+      enforce_admins: false
+      required_pull_request_reviews:
+        required_approving_review_count: 2
+        dismiss_stale_reviews: true
+        require_code_owner_reviews: true
+        require_last_push_approval: true
+      restrictions:
+        users: []
+        teams: ["devops-team", "security-team"]
+      allow_force_pushes: false
+      allow_deletions: false
+
+  - name: "develop"
+    protection:
+      required_status_checks:
+        strict: true
+        contexts:
+          - "Code Quality & Security"
+          - "Infrastructure Validation"
+          - "Build Application"
+          - "End-to-End Testing"
+      enforce_admins: false
+      required_pull_request_reviews:
+        required_approving_review_count: 1
+        dismiss_stale_reviews: true
+        require_code_owner_reviews: true
+      allow_force_pushes: false
+      allow_deletions: false
+
+# Repository Secrets (to be configured manually)
+secrets:
+  # Azure Authentication
+  AZURE_CLIENT_ID: "Service Principal Client ID"
+  AZURE_CLIENT_SECRET: "Service Principal Secret"
+  AZURE_SUBSCRIPTION_ID: "Azure Subscription ID"
+  AZURE_TENANT_ID: "Azure Tenant ID"
+  
+  # Environment-specific secrets
+  AZURE_CLIENT_ID_STAGING: "Staging Service Principal Client ID"
+  AZURE_CLIENT_SECRET_STAGING: "Staging Service Principal Secret"
+  AZURE_CLIENT_ID_PRODUCTION: "Production Service Principal Client ID"
+  AZURE_CLIENT_SECRET_PRODUCTION: "Production Service Principal Secret"
+  
+  # Function App Publishing
+  AZURE_FUNCTIONAPP_PUBLISH_PROFILE_STAGING: "Staging Function App Publish Profile"
+  AZURE_FUNCTIONAPP_PUBLISH_PROFILE_PRODUCTION: "Production Function App Publish Profile"
+  
+  # Application URLs
+  FUNCTION_APP_URL_STAGING: "https://sports-prediction-staging.azurewebsites.net"
+  FUNCTION_APP_URL_PRODUCTION: "https://sports-prediction-prod.azurewebsites.net"
+  
+  # Notification
+  SLACK_WEBHOOK_URL: "Slack webhook URL for notifications (optional)"
+
+# Repository Variables (to be configured manually)
+variables:
+  AZURE_LOCATION: "East US"
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "18"
+  TERRAFORM_VERSION: "latest"
+
+# Environment Protection Rules
+environments:
+  staging:
+    reviewers:
+      - type: "team"
+        name: "devops-team"
+    wait_timer: 5
+    deployment_branch_policy:
+      protected_branches: false
+      custom_branch_policies: true
+
+  production:
+    reviewers:
+      - type: "team"
+        name: "devops-team"
+      - type: "team"
+        name: "security-team"
+    wait_timer: 30
+    deployment_branch_policy:
+      protected_branches: true
+      custom_branch_policies: false
+
+# Required Teams (to be created)
+teams:
+  - name: "devops-team"
+    description: "DevOps and Infrastructure team"
+    permission: "admin"
+    members:
+      - "Add your DevOps team members here"
+  
+  - name: "backend-team"
+    description: "Backend application development team"
+    permission: "push"
+    members:
+      - "Add your backend team members here"
+  
+  - name: "qa-team"
+    description: "Quality Assurance and Testing team"
+    permission: "push"
+    members:
+      - "Add your QA team members here"
+  
+  - name: "security-team"
+    description: "Security and Compliance team"
+    permission: "admin"
+    members:
+      - "Add your security team members here"
+  
+  - name: "docs-team"
+    description: "Documentation team"
+    permission: "push"
+    members:
+      - "Add your documentation team members here"
+
+# Webhook Configuration (optional)
+webhooks:
+  - url: "https://your-slack-webhook-url"
+    content_type: "json"
+    events:
+      - "push"
+      - "pull_request"
+      - "deployment"
+      - "deployment_status"
+    active: true
+
+# Repository Labels
+labels:
+  # Type labels
+  - name: "bug"
+    color: "d73a4a"
+    description: "Something isn't working"
+  
+  - name: "enhancement"
+    color: "a2eeef"
+    description: "New feature or request"
+  
+  - name: "documentation"
+    color: "0075ca"
+    description: "Improvements or additions to documentation"
+  
+  # Priority labels
+  - name: "priority: critical"
+    color: "b60205"
+    description: "Critical priority"
+  
+  - name: "priority: high"
+    color: "e99695"
+    description: "High priority"
+  
+  - name: "priority: medium"
+    color: "fbca04"
+    description: "Medium priority"
+  
+  - name: "priority: low"
+    color: "0e8a16"
+    description: "Low priority"
+  
+  # Component labels
+  - name: "component: api"
+    color: "1d76db"
+    description: "API-related changes"
+  
+  - name: "component: infrastructure"
+    color: "5319e7"
+    description: "Infrastructure changes"
+  
+  - name: "component: ml"
+    color: "0052cc"
+    description: "Machine learning components"
+  
+  - name: "component: testing"
+    color: "c2e0c6"
+    description: "Testing-related changes"
+  
+  # Status labels
+  - name: "needs-triage"
+    color: "d4c5f9"
+    description: "Needs initial assessment"
+  
+  - name: "in-progress"
+    color: "ededed"
+    description: "Work in progress"
+  
+  - name: "blocked"
+    color: "f9c23c"
+    description: "Blocked by external dependency"
+  
+  # Special labels
+  - name: "emergency"
+    color: "b60205"
+    description: "Emergency issue requiring immediate attention"
+  
+  - name: "rollback"
+    color: "d93f0b"
+    description: "Rollback-related issue"
+  
+  - name: "security"
+    color: "c5def5"
+    description: "Security-related issue"

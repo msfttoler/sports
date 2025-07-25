@@ -1,0 +1,312 @@
+name: Emergency Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to rollback'
+        required: true
+        type: choice
+        options:
+        - staging
+        - production
+      rollback_version:
+        description: 'Tag or commit to rollback to (optional)'
+        required: false
+        type: string
+      reason:
+        description: 'Reason for rollback'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  validate-rollback:
+    name: Validate Rollback Request
+    runs-on: ubuntu-latest
+    outputs:
+      rollback-approved: ${{ steps.validation.outputs.approved }}
+      target-version: ${{ steps.validation.outputs.target-version }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Validate rollback request
+      id: validation
+      run: |
+        echo "🔄 Validating rollback request..."
+        echo "Environment: ${{ inputs.environment }}"
+        echo "Reason: ${{ inputs.reason }}"
+        echo "Requested by: ${{ github.actor }}"
+        
+        # Determine target version
+        if [ -n "${{ inputs.rollback_version }}" ]; then
+          TARGET_VERSION="${{ inputs.rollback_version }}"
+        else
+          # Get the second latest production tag (latest should be current)
+          TARGET_VERSION=$(git tag -l "production-*" | sort -r | sed -n '2p')
+        fi
+        
+        if [ -z "$TARGET_VERSION" ]; then
+          echo "❌ No valid rollback target found"
+          exit 1
+        fi
+        
+        echo "Target version: $TARGET_VERSION"
+        echo "approved=true" >> $GITHUB_OUTPUT
+        echo "target-version=$TARGET_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Create rollback issue
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { data: issue } = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `🚨 Emergency Rollback - ${{ inputs.environment }}`,
+            body: `## Emergency Rollback Request
+            
+            **Environment:** ${{ inputs.environment }}
+            **Target Version:** ${{ steps.validation.outputs.target-version }}
+            **Requested By:** ${{ github.actor }}
+            **Reason:** ${{ inputs.reason }}
+            **Workflow:** [View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            **Status:** 🟡 In Progress
+            
+            ## Timeline
+            - **${{ steps.validation.outputs.target-version }}** - Rollback initiated
+            
+            > This issue will be automatically updated with rollback progress.
+            `,
+            labels: ['emergency', 'rollback', 'production']
+          });
+          
+          core.setOutput('issue-number', issue.number);
+
+  rollback-staging:
+    name: Rollback Staging
+    runs-on: ubuntu-latest
+    needs: validate-rollback
+    if: ${{ needs.validate-rollback.outputs.rollback-approved == 'true' && inputs.environment == 'staging' }}
+    environment: staging
+    
+    steps:
+    - name: Checkout target version
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ needs.validate-rollback.outputs.target-version }}
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Prepare rollback package
+      run: |
+        pip install -r requirements.txt
+        
+        # Create deployment package
+        mkdir -p deployment-package
+        cp -r models deployment-package/
+        cp -r shared deployment-package/
+        cp -r sports_data_ingestion deployment-package/
+        cp -r game_predictor deployment-package/
+        cp -r get_predictions deployment-package/
+        cp -r get_team_stats deployment-package/
+        cp -r scheduled_data_sync deployment-package/
+        cp -r health_check deployment-package/
+        cp requirements.txt deployment-package/
+        cp host.json deployment-package/
+        
+        cd deployment-package
+        zip -r ../sports-prediction-rollback.zip .
+
+    - name: Deploy rollback to staging
+      uses: Azure/functions-action@v1
+      with:
+        app-name: ${{ secrets.AZURE_FUNCTIONAPP_NAME_STAGING }}
+        package: 'sports-prediction-rollback.zip'
+        publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE_STAGING }}
+
+    - name: Verify rollback
+      run: |
+        sleep 30
+        FUNCTION_URL="${{ secrets.FUNCTION_APP_URL_STAGING }}"
+        
+        # Health check
+        if curl -f "$FUNCTION_URL/api/health"; then
+          echo "✅ Staging rollback successful"
+        else
+          echo "❌ Staging rollback failed"
+          exit 1
+        fi
+
+  rollback-production:
+    name: Rollback Production
+    runs-on: ubuntu-latest
+    needs: validate-rollback
+    if: ${{ needs.validate-rollback.outputs.rollback-approved == 'true' && inputs.environment == 'production' }}
+    environment: production
+    
+    steps:
+    - name: Checkout target version
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ needs.validate-rollback.outputs.target-version }}
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Prepare rollback package
+      run: |
+        pip install -r requirements.txt
+        
+        # Create deployment package
+        mkdir -p deployment-package
+        cp -r models deployment-package/
+        cp -r shared deployment-package/
+        cp -r sports_data_ingestion deployment-package/
+        cp -r game_predictor deployment-package/
+        cp -r get_predictions deployment-package/
+        cp -r get_team_stats deployment-package/
+        cp -r scheduled_data_sync deployment-package/
+        cp -r health_check deployment-package/
+        cp requirements.txt deployment-package/
+        cp host.json deployment-package/
+        
+        cd deployment-package
+        zip -r ../sports-prediction-rollback.zip .
+
+    - name: Create backup of current state
+      run: |
+        BACKUP_TAG="backup-$(date +'%Y%m%d-%H%M%S')"
+        git tag "$BACKUP_TAG"
+        echo "Created backup tag: $BACKUP_TAG"
+
+    - name: Deploy rollback to production
+      uses: Azure/functions-action@v1
+      with:
+        app-name: ${{ secrets.AZURE_FUNCTIONAPP_NAME_PRODUCTION }}
+        package: 'sports-prediction-rollback.zip'
+        publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE_PRODUCTION }}
+
+    - name: Verify rollback
+      run: |
+        sleep 60
+        FUNCTION_URL="${{ secrets.FUNCTION_APP_URL_PRODUCTION }}"
+        
+        # Comprehensive health check
+        if curl -f "$FUNCTION_URL/api/health"; then
+          echo "✅ Production rollback successful"
+          
+          # Test key endpoints
+          curl -f "$FUNCTION_URL/api/predictions?limit=1"
+          echo "🔍 API endpoints verified"
+        else
+          echo "❌ Production rollback failed"
+          exit 1
+        fi
+
+    - name: Tag rollback version
+      run: |
+        ROLLBACK_TAG="rollback-$(date +'%Y%m%d-%H%M%S')"
+        git tag "$ROLLBACK_TAG"
+        echo "Created rollback tag: $ROLLBACK_TAG"
+
+  notify-rollback:
+    name: Notify Rollback Completion
+    runs-on: ubuntu-latest
+    needs: [validate-rollback, rollback-staging, rollback-production]
+    if: always()
+    
+    steps:
+    - name: Determine rollback status
+      id: status
+      run: |
+        if [ "${{ inputs.environment }}" == "staging" ]; then
+          STATUS="${{ needs.rollback-staging.result }}"
+        else
+          STATUS="${{ needs.rollback-production.result }}"
+        fi
+        
+        echo "rollback-status=$STATUS" >> $GITHUB_OUTPUT
+
+    - name: Create notification
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const status = "${{ steps.status.outputs.rollback-status }}";
+          const emoji = status === 'success' ? '✅' : '❌';
+          const statusText = status === 'success' ? 'COMPLETED' : 'FAILED';
+          
+          const comment = `## 🚨 Rollback ${statusText}
+          
+          **Environment:** ${{ inputs.environment }}
+          **Target Version:** ${{ needs.validate-rollback.outputs.target-version }}
+          **Status:** ${emoji} ${statusText}
+          **Completed At:** ${new Date().toISOString()}
+          
+          ### Next Steps
+          ${status === 'success' 
+            ? '- Monitor application for stability\n- Investigate root cause\n- Plan forward fix'
+            : '- Check workflow logs for errors\n- Consider manual intervention\n- Escalate to on-call team'
+          }
+          
+          **Workflow Run:** [View Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          `;
+          
+          // Post to Slack if webhook is configured
+          const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+          if (webhookUrl) {
+            const slackMessage = {
+              text: `${emoji} Rollback ${statusText} - ${{ inputs.environment }}`,
+              blocks: [
+                {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: `*🚨 Emergency Rollback ${statusText}*\n\n*Environment:* ${{ inputs.environment }}\n*Version:* ${{ needs.validate-rollback.outputs.target-version }}\n*Reason:* ${{ inputs.reason }}\n*Status:* ${emoji} ${statusText}`
+                  }
+                }
+              ]
+            };
+            
+            await fetch(webhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(slackMessage)
+            });
+          }
+          
+          return comment;
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
