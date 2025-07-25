@@ -1,0 +1,23 @@
+name: production
+url: https://sports-prediction-prod.azurewebsites.net
+reviewers:
+  - "devops-team"
+  - "security-team"
+protection_rules:
+  required_reviewers: 2
+  wait_timer: 30  # 30 minutes
+  prevent_self_review: true
+deployment_branch_policy:
+  protected_branches: true
+  custom_branch_policies: false
+variables:
+  AZURE_RESOURCE_GROUP: "rg-sports-prediction-prod"
+  AZURE_LOCATION: "East US"
+  ENVIRONMENT_NAME: "production"
+secrets:
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID_PRODUCTION }}
+  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET_PRODUCTION }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_FUNCTIONAPP_PUBLISH_PROFILE_PRODUCTION: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE_PRODUCTION }}
+  FUNCTION_APP_URL_PRODUCTION: ${{ secrets.FUNCTION_APP_URL_PRODUCTION }}
