@@ -5,6 +5,11 @@ output "AZURE_RESOURCE_GROUP" {
   value       = azurerm_resource_group.main.name
 }
 
+output "RESOURCE_GROUP_ID" {
+  description = "Resource group ID"
+  value       = azurerm_resource_group.main.id
+}
+
 output "AZURE_LOCATION" {
   description = "Azure region where resources are deployed"
   value       = azurerm_resource_group.main.location

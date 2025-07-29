@@ -433,6 +433,10 @@ resource "azurerm_linux_function_app" "main" {
   
   depends_on = [
     azurerm_role_assignment.storage_blob_data_owner,
+    azurerm_role_assignment.storage_blob_data_contributor,
+    azurerm_role_assignment.storage_queue_data_contributor,
+    azurerm_role_assignment.storage_table_data_contributor,
+    azurerm_role_assignment.monitoring_metrics_publisher,
     azurerm_role_assignment.cosmos_contributor
   ]
 }
@@ -448,6 +452,35 @@ resource "azurerm_role_assignment" "storage_blob_data_owner" {
 resource "azurerm_role_assignment" "cosmos_contributor" {
   scope                = azurerm_cosmosdb_account.main.id
   role_definition_name = "Cosmos DB Built-in Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.main.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# Additional storage role assignments required for Azure Functions
+resource "azurerm_role_assignment" "storage_blob_data_contributor" {
+  scope                = azurerm_storage_account.main.id
+  role_definition_id   = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe"
+  principal_id         = azurerm_user_assigned_identity.main.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "storage_queue_data_contributor" {
+  scope                = azurerm_storage_account.main.id
+  role_definition_id   = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/974c5e8b-45b9-4653-ba55-5f855dd0fb88"
+  principal_id         = azurerm_user_assigned_identity.main.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "storage_table_data_contributor" {
+  scope                = azurerm_storage_account.main.id
+  role_definition_id   = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3"
+  principal_id         = azurerm_user_assigned_identity.main.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "monitoring_metrics_publisher" {
+  scope                = azurerm_resource_group.main.id
+  role_definition_id   = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Authorization/roleDefinitions/3913510d-42f4-4e42-8a64-420c390055eb"
   principal_id         = azurerm_user_assigned_identity.main.principal_id
   principal_type       = "ServicePrincipal"
 }
