@@ -121,6 +121,121 @@ This system provides:
 - **30-49%**: Low confidence (uncertain outcome)
 - **0-29%**: Very low confidence (insufficient data)
 
+## ⚖️ Weighted Statistical System
+
+### Overview
+The enhanced prediction system uses **configurable statistical weights** to prioritize different types of data based on sport and context. This allows for more nuanced predictions that reflect the unique characteristics of each sport.
+
+### Statistical Categories
+
+The system organizes all statistics into 10 weighted categories:
+
+| Category | Description | Example Features |
+|----------|-------------|------------------|
+| **Recent Performance** | Current team form | Win rate in last 5 games, recent scoring |
+| **Historical Performance** | Long-term team record | Season win %, all-time record |
+| **Head-to-Head** | Matchup history | Historical outcomes between teams |
+| **Home Advantage** | Venue impact | Home field win rate, crowd factors |
+| **Offensive Stats** | Scoring capabilities | Points per game, yards gained |
+| **Defensive Stats** | Defensive strength | Points allowed, defensive rankings |
+| **Injury Reports** | Player availability | Key player injuries, roster depth |
+| **Situational** | Game context | Rest days, travel distance, playoff implications |
+| **Weather** | Environmental factors | Temperature, wind, precipitation |
+| **Momentum** | Team psychology | Winning streaks, recent performance trends |
+
+### Sport-Specific Weight Configurations
+
+Each sport emphasizes different statistical categories based on what matters most for accurate predictions:
+
+#### 🏈 NFL Configuration
+```
+Head-to-Head:           22%  ████████████████████
+Recent Performance:     17%  ████████████████
+Historical Performance: 13%  ████████████
+Home Advantage:         13%  ████████████
+Offensive Stats:         9%  ████████
+Defensive Stats:         9%  ████████
+Injury Reports:          7%  ██████
+Situational:             6%  █████
+Weather:                 4%  ███
+```
+
+#### 🏀 NBA Configuration
+```
+Recent Performance:     25%  ████████████████████████
+Historical Performance: 17%  ████████████████
+Head-to-Head:           12%  ███████████
+Momentum:                8%  ███████
+Home Advantage:          8%  ███████
+Offensive Stats:         8%  ███████
+Defensive Stats:         8%  ███████
+Injury Reports:          8%  ███████
+Situational:             4%  ███
+```
+
+### API Enhancements
+
+#### Weight Configuration Endpoint
+```http
+GET /api/game-predictor?weights=true&sport=nfl
+```
+
+**Response:**
+```json
+{
+  "sport": "nfl",
+  "category_weights": {
+    "head_to_head": 0.22,
+    "recent_performance": 0.17,
+    "historical_performance": 0.13,
+    "home_advantage": 0.13
+  },
+  "feature_categories": {
+    "recent_win_percentage": "recent_performance",
+    "historical_home_win_rate": "head_to_head"
+  }
+}
+```
+
+#### Enhanced Prediction Response
+```json
+{
+  "outcome": "home_win",
+  "confidence": 87.3,
+  "home_score": 28.5,
+  "away_score": 21.2,
+  "reasoning": "Head-to-Head strongly favors this outcome. Recent Performance shows significant advantage. High confidence due to strong statistical consensus.",
+  "feature_importance": {
+    "head_to_head_win_rate": 0.23,
+    "recent_win_percentage": 0.18,
+    "home_field_advantage": 0.15
+  },
+  "category_contributions": {
+    "head_to_head": 0.85,
+    "recent_performance": 0.72,
+    "home_advantage": 0.61
+  }
+}
+```
+
+### Key Benefits
+
+🎯 **Sport-Specific Tuning**: NFL emphasizes head-to-head matchups, NBA prioritizes recent form  
+📊 **Transparency**: See exactly which factors influence each prediction  
+⚙️ **Configurable**: Weights can be adjusted based on analysis and performance  
+🔍 **Feature Importance**: Track which statistics matter most for accuracy  
+📈 **Enhanced Reasoning**: Detailed explanations of prediction logic  
+
+### Demo the Weighted System
+
+```bash
+# Run the interactive demonstration
+python demo_weights.py
+
+# Test the weighted prediction system
+python test_weighted_predictions.py
+```
+
 ## 💾 Data Models
 
 ### Game Data

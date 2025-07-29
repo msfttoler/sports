@@ -15,7 +15,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from shared.utils import cosmos_client, config
 from sports_data_ingestion import SportsDataIngester
-from game_predictor import GamePredictor
+from game_predictor import EnhancedGamePredictor
 
 
 async def main(timer: func.TimerRequest) -> None:
@@ -47,7 +47,7 @@ async def main(timer: func.TimerRequest) -> None:
     try:
         # Initialize services
         ingester = SportsDataIngester()
-        predictor = GamePredictor()
+        predictor = EnhancedGamePredictor()
         
         await ingester.initialize_api_clients()
         await predictor.load_models()
@@ -95,7 +95,7 @@ async def main(timer: func.TimerRequest) -> None:
         await store_sync_results(sync_results)
 
 
-async def process_sport_data(ingester: 'SportsDataIngester', predictor: 'GamePredictor', sport: str, year: int) -> dict:
+async def process_sport_data(ingester: 'SportsDataIngester', predictor: 'EnhancedGamePredictor', sport: str, year: int) -> dict:
     """Process data for a specific sport."""
     sport_results = {
         "sport": sport,
