@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sports Arbitrage Finder</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242836;
+    --border: #2e3348;
+    --text: #e1e4ed;
+    --text-dim: #8b8fa3;
+    --accent: #6c5ce7;
+    --green: #00b894;
+    --green-dim: #00b89433;
+    --red: #d63031;
+    --yellow: #fdcb6e;
+    --blue: #0984e3;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  /* Header */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .header h1 { font-size: 1.4rem; font-weight: 700; }
+  .header h1 span { color: var(--green); }
+  .header-actions { display: flex; gap: .75rem; align-items: center; }
+  .badge {
+    font-size: .75rem;
+    padding: .2rem .6rem;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .badge-green { background: var(--green-dim); color: var(--green); }
+  .badge-yellow { background: #fdcb6e33; color: var(--yellow); }
+  .badge-red { background: #d6303133; color: var(--red); }
+  .badge-blue { background: #0984e333; color: var(--blue); }
+
+  button, .btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: .5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: .85rem;
+    font-weight: 600;
+    transition: opacity .15s;
+  }
+  button:hover { opacity: .85; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-outline.active { border-color: var(--accent); color: var(--accent); background: #6c5ce711; }
+
+  /* Layout */
+  .container { max-width: 1280px; margin: 0 auto; padding: 1.5rem 2rem; }
+
+  /* Stats bar */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+  }
+  .stat-card .label { font-size: .75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; }
+  .stat-card .value { font-size: 1.6rem; font-weight: 700; margin-top: .25rem; }
+
+  /* Filter bar */
+  .filter-bar {
+    display: flex;
+    gap: .5rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+  }
+
+  /* Arb cards */
+  .arb-list { display: flex; flex-direction: column; gap: 1rem; }
+  .arb-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    transition: border-color .15s;
+  }
+  .arb-card:hover { border-color: var(--green); }
+  .arb-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: .75rem;
+  }
+  .arb-matchup { font-size: 1.05rem; font-weight: 600; }
+  .arb-meta {
+    display: flex; gap: .5rem; margin-top: .3rem;
+    font-size: .78rem; color: var(--text-dim);
+  }
+  .arb-profit {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--green);
+    white-space: nowrap;
+  }
+  .arb-legs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: .75rem;
+    margin-top: .75rem;
+  }
+  .leg-card {
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: .85rem 1rem;
+  }
+  .leg-outcome { font-weight: 700; font-size: .95rem; }
+  .leg-book { color: var(--text-dim); font-size: .8rem; margin-top: .15rem; }
+  .leg-details {
+    display: flex; justify-content: space-between;
+    margin-top: .5rem; font-size: .85rem;
+  }
+  .leg-price { color: var(--yellow); font-weight: 700; }
+  .leg-stake { color: var(--blue); font-weight: 600; }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 4rem 1rem;
+    color: var(--text-dim);
+  }
+  .empty-state h2 { font-size: 1.3rem; margin-bottom: .5rem; color: var(--text); }
+
+  /* Bankroll input */
+  .bankroll-input {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: .85rem;
+  }
+  .bankroll-input label { color: var(--text-dim); }
+  .bankroll-input input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: .35rem .6rem;
+    width: 90px;
+    font-size: .85rem;
+  }
+
+  /* Spinner */
+  .spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+    vertical-align: middle;
+    margin-right: .4rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: .75rem 1.25rem;
+    font-size: .85rem;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+    opacity: 0;
+    transform: translateY(1rem);
+    transition: all .3s;
+    z-index: 1000;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    .header { padding: 1rem; flex-direction: column; gap: .75rem; }
+    .container { padding: 1rem; }
+    .stats-bar { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div>
+    <h1>&#9918; Sports <span>Arbitrage</span> Finder</h1>
+  </div>
+  <div class="header-actions">
+    <div class="bankroll-input">
+      <label>Bankroll $</label>
+      <input type="number" id="bankroll" value="100" min="1" step="1" onchange="renderArbs()">
+    </div>
+    <button id="refreshBtn" onclick="doRefresh()">&#8635; Refresh Odds</button>
+    <span id="statusBadge" class="badge badge-green">Ready</span>
+  </div>
+</div>
+
+<!-- Content -->
+<div class="container">
+  <!-- Stats -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="label">Live Arbs</div>
+      <div class="value" id="arbCount">–</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Best Profit</div>
+      <div class="value" id="bestProfit" style="color:var(--green)">–</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Events Scanned</div>
+      <div class="value" id="eventsScanned">–</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">API Calls Left</div>
+      <div class="value" id="apiRemaining">–</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Last Refresh</div>
+      <div class="value" id="lastRefresh" style="font-size:1rem">–</div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filter-bar" id="filterBar">
+    <button class="btn-outline active" data-sport="all" onclick="setFilter('all', this)">All Sports</button>
+    <button class="btn-outline" data-sport="NFL" onclick="setFilter('americanfootball_nfl', this)">&#127944; NFL</button>
+    <button class="btn-outline" data-sport="NBA" onclick="setFilter('basketball_nba', this)">&#127936; NBA</button>
+    <button class="btn-outline" data-sport="MLB" onclick="setFilter('baseball_mlb', this)">&#9918; MLB</button>
+    <button class="btn-outline" data-sport="NHL" onclick="setFilter('icehockey_nhl', this)">&#127954; NHL</button>
+  </div>
+
+  <!-- Arb list -->
+  <div class="arb-list" id="arbList">
+    <div class="empty-state">
+      <h2>Loading…</h2>
+      <p>Fetching arbitrage opportunities</p>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+  let allArbs = [];
+  let currentFilter = 'all';
+
+  // ── Helpers ──────────────────────────────────────────────
+  function americanOddsStr(price) {
+    return price > 0 ? `+${price}` : `${price}`;
+  }
+
+  function formatTime(iso) {
+    if (!iso) return '–';
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+
+  function sportEmoji(key) {
+    if (key.includes('nfl')) return '🏈';
+    if (key.includes('nba')) return '🏀';
+    if (key.includes('mlb')) return '⚾';
+    if (key.includes('nhl')) return '🏒';
+    return '🎯';
+  }
+
+  function sportLabel(key) {
+    if (key.includes('nfl')) return 'NFL';
+    if (key.includes('nba')) return 'NBA';
+    if (key.includes('mlb')) return 'MLB';
+    if (key.includes('nhl')) return 'NHL';
+    return key;
+  }
+
+  function showToast(msg, ms = 3000) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), ms);
+  }
+
+  // ── Data fetching ───────────────────────────────────────
+  async function fetchArbs() {
+    try {
+      const resp = await fetch('/api/arbitrage');
+      const data = await resp.json();
+      allArbs = data.arbitrage || [];
+      renderArbs();
+    } catch (e) {
+      console.error('Error fetching arbs:', e);
+    }
+  }
+
+  async function fetchStatus() {
+    try {
+      const resp = await fetch('/api/status');
+      const data = await resp.json();
+      const last = data.last_refresh;
+      if (last) {
+        document.getElementById('eventsScanned').textContent = last.events_fetched ?? '–';
+        document.getElementById('apiRemaining').textContent =
+          last.api_requests_remaining ?? data.api_usage?.requests_remaining ?? '–';
+        document.getElementById('lastRefresh').textContent = formatTime(last.timestamp);
+      }
+      if (!data.api_key_configured) {
+        document.getElementById('statusBadge').className = 'badge badge-yellow';
+        document.getElementById('statusBadge').textContent = 'No API Key';
+      }
+    } catch (e) {
+      console.error('Error fetching status:', e);
+    }
+  }
+
+  async function doRefresh() {
+    const btn = document.getElementById('refreshBtn');
+    const badge = document.getElementById('statusBadge');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Refreshing…';
+    badge.className = 'badge badge-blue';
+    badge.textContent = 'Refreshing';
+    try {
+      const resp = await fetch('/api/refresh', { method: 'POST' });
+      const data = await resp.json();
+      if (data.errors && data.errors.length) {
+        showToast('⚠️ ' + data.errors[0]);
+        badge.className = 'badge badge-yellow';
+        badge.textContent = 'Warning';
+      } else {
+        showToast(`✅ Found ${data.arbitrage_found} arb(s) across ${data.events_fetched} events`);
+        badge.className = 'badge badge-green';
+        badge.textContent = 'Ready';
+      }
+      await fetchArbs();
+      await fetchStatus();
+    } catch (e) {
+      showToast('❌ Refresh failed: ' + e.message);
+      badge.className = 'badge badge-red';
+      badge.textContent = 'Error';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '&#8635; Refresh Odds';
+    }
+  }
+
+  // ── Rendering ───────────────────────────────────────────
+  function setFilter(sport, btnEl) {
+    currentFilter = sport;
+    document.querySelectorAll('.filter-bar .btn-outline').forEach(b => b.classList.remove('active'));
+    btnEl.classList.add('active');
+    renderArbs();
+  }
+
+  function renderArbs() {
+    const container = document.getElementById('arbList');
+    const bankroll = parseFloat(document.getElementById('bankroll').value) || 100;
+
+    let filtered = allArbs;
+    if (currentFilter !== 'all') {
+      filtered = allArbs.filter(a => a.sport_key === currentFilter);
+    }
+
+    // Update stats
+    document.getElementById('arbCount').textContent = filtered.length;
+    if (filtered.length > 0) {
+      const best = Math.max(...filtered.map(a => a.profit_pct));
+      document.getElementById('bestProfit').textContent = best.toFixed(2) + '%';
+    } else {
+      document.getElementById('bestProfit').textContent = '–';
+    }
+
+    if (filtered.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <h2>No arbitrage opportunities found</h2>
+          <p>This is normal — true arbs are rare and fleeting. Keep checking or lower the minimum profit threshold in your .env file.</p>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = filtered.map(arb => {
+      const legs = arb.legs || [];
+      const legsHtml = legs.map(leg => {
+        const stakeAmt = (leg.stake_pct / 100 * bankroll).toFixed(2);
+        return `
+          <div class="leg-card">
+            <div class="leg-outcome">${leg.outcome}</div>
+            <div class="leg-book">@ ${leg.bookmaker}</div>
+            <div class="leg-details">
+              <span class="leg-price">${americanOddsStr(leg.price)}</span>
+              <span>Implied: ${(leg.implied_prob * 100).toFixed(1)}%</span>
+              <span class="leg-stake">$${stakeAmt}</span>
+            </div>
+          </div>`;
+      }).join('');
+
+      const profitAmt = (arb.profit_pct / 100 * bankroll).toFixed(2);
+
+      return `
+        <div class="arb-card">
+          <div class="arb-header">
+            <div>
+              <div class="arb-matchup">${arb.event_name}</div>
+              <div class="arb-meta">
+                <span class="badge badge-blue">${sportEmoji(arb.sport_key)} ${sportLabel(arb.sport_key)}</span>
+                <span>${arb.market.toUpperCase()}</span>
+                <span>${formatTime(arb.commence_time)}</span>
+              </div>
+            </div>
+            <div style="text-align:right">
+              <div class="arb-profit">+${arb.profit_pct.toFixed(2)}%</div>
+              <div style="font-size:.8rem;color:var(--text-dim)">$${profitAmt} on $${bankroll}</div>
+            </div>
+          </div>
+          <div class="arb-legs">${legsHtml}</div>
+        </div>`;
+    }).join('');
+  }
+
+  // ── Init ────────────────────────────────────────────────
+  fetchArbs();
+  fetchStatus();
+  // Auto-refresh the UI every 60 seconds
+  setInterval(() => { fetchArbs(); fetchStatus(); }, 60000);
+</script>
+</body>
+</html>

@@ -1,547 +1,171 @@
-# Sports Prediction System
+# Sports Arbitrage Finder
 
-An Azure Functions-based system that aggregates sports data and uses machine learning to predict game outcomes with confidence scores.
+A local Python application that monitors live odds across multiple sportsbooks and surfaces **arbitrage opportunities** — situations where you can bet both sides of an event at different books and guarantee a profit regardless of the outcome.
 
-## 🏈 Overview
-
-This system provides:
-- **Sports Data Aggregation**: Collects real-time sports scores and statistics from multiple APIs
-- **AI/ML Predictions**: Uses machine learning models to predict game outcomes
-- **Confidence Scoring**: Provides confidence scores (0-100%) for all predictions
-- **RESTful APIs**: Easy-to-use endpoints for accessing predictions and statistics
-- **Scalable Architecture**: Built on Azure Functions with Cosmos DB for high availability
-
-## 🏗️ Architecture
+## How It Works
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Sports APIs   │    │  Azure Functions │    │   Cosmos DB     │
-│  (ESPN, etc.)   │───▶│   (Python 3.11)  │───▶│  (NoSQL Store)  │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+┌──────────────┐     ┌──────────────────┐     ┌───────────────┐
+│ The Odds API │────▶│  Arbitrage Engine │────▶│  Web Dashboard│
+│ (live odds)  │     │  (detect + calc)  │     │  (FastAPI)    │
+└──────────────┘     └──────────────────┘     └───────────────┘
                               │
                               ▼
-                       ┌─────────────────┐
-                       │  ML Prediction  │
-                       │    Models       │
-                       └─────────────────┘
+                     ┌──────────────────┐
+                     │    SQLite DB     │
+                     │ (history + odds) │
+                     └──────────────────┘
 ```
 
-### Components
+1. **Pulls live odds** from 30+ US sportsbooks via [The Odds API](https://the-odds-api.com)
+2. **Scans every event** — for each market, finds the best price per outcome across all books
+3. **Detects arbitrage** when combined implied probabilities dip below 100%
+4. **Shows you exactly** where to bet, at what odds, and how much to stake for guaranteed profit
+5. **Persists history** in a local SQLite database so you can track patterns
 
-- **Data Ingestion Functions**: Collect sports data from external APIs
-- **Prediction Engine**: ML models for outcome prediction with confidence scoring
-- **API Endpoints**: RESTful interfaces for data access
-- **Scheduled Sync**: Automated data synchronization every 6 hours
-- **Storage Layer**: Cosmos DB containers for games, predictions, and statistics
+## Sports Covered
 
-## 🚀 Quick Start
+| Sport | API Key | Season |
+|-------|---------|--------|
+| 🏈 NFL | `americanfootball_nfl` | Sep – Feb |
+| 🏀 NBA | `basketball_nba` | Oct – Jun |
+| ⚾ MLB | `baseball_mlb` | Mar – Oct |
+| 🏒 NHL | `icehockey_nhl` | Oct – Jun |
 
-### Prerequisites
+## Quick Start
 
-- Python 3.11+
-- Azure CLI
-- Azure Developer CLI (azd)
-- Azure Functions Core Tools
-- Terraform (optional, for infrastructure)
-
-### Local Development
-
-1. **Clone and setup:**
-   ```bash
-   git clone <repository-url>
-   cd sports
-   chmod +x scripts/dev-setup.sh
-   ./scripts/dev-setup.sh
-   ```
-
-2. **Configure local settings:**
-   - Update `local.settings.json` with your API keys
-   - Start Cosmos DB Emulator for local development
-
-3. **Start development server:**
-   ```bash
-   func start
-   ```
-
-### Azure Deployment
-
-1. **Automated deployment:**
-   ```bash
-   chmod +x scripts/deploy.sh
-   ./scripts/deploy.sh
-   ```
-
-2. **Manual deployment:**
-   ```bash
-   # Deploy infrastructure
-   cd infra
-   terraform init
-   terraform plan -var-file="main.tfvars.json"
-   terraform apply
-
-   # Deploy application
-   func azure functionapp publish <function-app-name> --python
-   ```
-
-## 📊 API Endpoints
-
-### Sports Data Ingestion
-- **Endpoint**: `POST /api/sports-data`
-- **Purpose**: Trigger data collection from sports APIs
-- **Parameters**: `sport` (optional), `date` (optional)
-
-### Game Predictions
-- **Endpoint**: `POST /api/game-predictor`
-- **Purpose**: Generate ML predictions for games
-- **Body**: Game data JSON
-
-### Get Predictions
-- **Endpoint**: `GET /api/predictions`
-- **Purpose**: Retrieve game predictions
-- **Query Params**: `sport`, `date`, `team`, `confidence_min`
-
-### Team Statistics
-- **Endpoint**: `GET /api/team-stats/{team_name}`
-- **Purpose**: Get team performance statistics
-- **Returns**: Win rate, average scores, recent form
-
-## 🤖 Machine Learning Models
-
-### Prediction Features
-- Team historical performance
-- Head-to-head records
-- Recent form (last 5 games)
-- Home/away advantage
-- Player statistics
-
-### Confidence Scoring
-- **90-100%**: Very high confidence (strong historical patterns)
-- **70-89%**: High confidence (clear statistical advantage)
-- **50-69%**: Moderate confidence (slight edge detected)
-- **30-49%**: Low confidence (uncertain outcome)
-- **0-29%**: Very low confidence (insufficient data)
-
-## ⚖️ Weighted Statistical System
-
-### Overview
-The enhanced prediction system uses **configurable statistical weights** to prioritize different types of data based on sport and context. This allows for more nuanced predictions that reflect the unique characteristics of each sport.
-
-### Statistical Categories
-
-The system organizes all statistics into 10 weighted categories:
-
-| Category | Description | Example Features |
-|----------|-------------|------------------|
-| **Recent Performance** | Current team form | Win rate in last 5 games, recent scoring |
-| **Historical Performance** | Long-term team record | Season win %, all-time record |
-| **Head-to-Head** | Matchup history | Historical outcomes between teams |
-| **Home Advantage** | Venue impact | Home field win rate, crowd factors |
-| **Offensive Stats** | Scoring capabilities | Points per game, yards gained |
-| **Defensive Stats** | Defensive strength | Points allowed, defensive rankings |
-| **Injury Reports** | Player availability | Key player injuries, roster depth |
-| **Situational** | Game context | Rest days, travel distance, playoff implications |
-| **Weather** | Environmental factors | Temperature, wind, precipitation |
-| **Momentum** | Team psychology | Winning streaks, recent performance trends |
-
-### Sport-Specific Weight Configurations
-
-Each sport emphasizes different statistical categories based on what matters most for accurate predictions:
-
-#### 🏈 NFL Configuration
-```
-Head-to-Head:           22%  ████████████████████
-Recent Performance:     17%  ████████████████
-Historical Performance: 13%  ████████████
-Home Advantage:         13%  ████████████
-Offensive Stats:         9%  ████████
-Defensive Stats:         9%  ████████
-Injury Reports:          7%  ██████
-Situational:             6%  █████
-Weather:                 4%  ███
-```
-
-#### 🏀 NBA Configuration
-```
-Recent Performance:     25%  ████████████████████████
-Historical Performance: 17%  ████████████████
-Head-to-Head:           12%  ███████████
-Momentum:                8%  ███████
-Home Advantage:          8%  ███████
-Offensive Stats:         8%  ███████
-Defensive Stats:         8%  ███████
-Injury Reports:          8%  ███████
-Situational:             4%  ███
-```
-
-### API Enhancements
-
-#### Weight Configuration Endpoint
-```http
-GET /api/game-predictor?weights=true&sport=nfl
-```
-
-**Response:**
-```json
-{
-  "sport": "nfl",
-  "category_weights": {
-    "head_to_head": 0.22,
-    "recent_performance": 0.17,
-    "historical_performance": 0.13,
-    "home_advantage": 0.13
-  },
-  "feature_categories": {
-    "recent_win_percentage": "recent_performance",
-    "historical_home_win_rate": "head_to_head"
-  }
-}
-```
-
-#### Enhanced Prediction Response
-```json
-{
-  "outcome": "home_win",
-  "confidence": 87.3,
-  "home_score": 28.5,
-  "away_score": 21.2,
-  "reasoning": "Head-to-Head strongly favors this outcome. Recent Performance shows significant advantage. High confidence due to strong statistical consensus.",
-  "feature_importance": {
-    "head_to_head_win_rate": 0.23,
-    "recent_win_percentage": 0.18,
-    "home_field_advantage": 0.15
-  },
-  "category_contributions": {
-    "head_to_head": 0.85,
-    "recent_performance": 0.72,
-    "home_advantage": 0.61
-  }
-}
-```
-
-### Key Benefits
-
-🎯 **Sport-Specific Tuning**: NFL emphasizes head-to-head matchups, NBA prioritizes recent form  
-📊 **Transparency**: See exactly which factors influence each prediction  
-⚙️ **Configurable**: Weights can be adjusted based on analysis and performance  
-🔍 **Feature Importance**: Track which statistics matter most for accuracy  
-📈 **Enhanced Reasoning**: Detailed explanations of prediction logic  
-
-### Demo the Weighted System
+### 1. Install dependencies
 
 ```bash
-# Run the interactive demonstration
-python demo_weights.py
-
-# Test the weighted prediction system
-python test_weighted_predictions.py
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-## 💾 Data Models
+### 2. Get a free API key
 
-### Game Data
-```python
-{
-    "id": "game_123",
-    "home_team": "Team A",
-    "away_team": "Team B",
-    "sport": "NFL",
-    "game_date": "2024-01-15T18:00:00Z",
-    "status": "scheduled",
-    "home_score": 0,
-    "away_score": 0
-}
-```
+Sign up at [the-odds-api.com](https://the-odds-api.com) (free tier = 500 requests/month).
 
-### Prediction Data
-```python
-{
-    "id": "pred_123",
-    "game_id": "game_123",
-    "predicted_outcome": "home_win",
-    "confidence_score": 85,
-    "reasoning": "Home team has won 8 of last 10 meetings",
-    "created_at": "2024-01-15T12:00:00Z"
-}
-```
+Add your key to `.env`:
 
-## 🔧 Configuration
-
-### Environment Variables
-- `COSMOS_DB_CONNECTION_STRING`: Cosmos DB connection
-- `ESPN_API_KEY`: ESPN API access key
-- `SPORTS_API_KEY`: Additional sports API key
-- `AZURE_CLIENT_ID`: Managed identity client ID
-- `KEY_VAULT_URL`: Azure Key Vault URL
-
-### Azure Resources
-- **Function App**: Hosts the Python functions
-- **Cosmos DB**: NoSQL database for all data storage
-- **Key Vault**: Secure storage for API keys and secrets
-- **Storage Account**: Function app storage and logs
-- **Application Insights**: Monitoring and diagnostics
-
-## 🧪 Testing
-
-### Playwright End-to-End Testing (Recommended)
 ```bash
-# Navigate to tests directory
-cd tests
-
-# Install dependencies
-npm install
-npx playwright install
-
-# Run all tests
-./run-tests.sh
-
-# Run specific test types
-./run-tests.sh --type api          # API functionality tests
-./run-tests.sh --type performance  # Performance and load tests
-./run-tests.sh --type security     # Security vulnerability tests
-./run-tests.sh --type integration  # End-to-end workflow tests
-
-# Run against different environments
-./run-tests.sh --environment staging
-./run-tests.sh --environment production
-
-# Debug mode with visible browser
-./run-tests.sh --headed --debug
+ODDS_API_KEY=your_key_here
 ```
 
-### Python API Tests (Legacy)
+### 3. Run
+
 ```bash
-python scripts/test_api.py
+python run.py
 ```
 
-### Generate Sample Data
+Open **http://127.0.0.1:8000** in your browser.
+
+### Alternative: Docker
+
 ```bash
-python scripts/generate_sample_data.py
+# Add your API key to .env first, then:
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Stop
+docker compose down
 ```
 
-### Load Testing
-```bash
-# Playwright load testing (recommended)
-cd tests
-./run-tests.sh --type performance
+Open **http://localhost:8000**. The SQLite database is persisted in a Docker volume so it survives container restarts.
 
-# Locust load testing (alternative)
-pip install locust
-locust -f scripts/load_test.py --host=https://your-function-app.azurewebsites.net
-```
+## Dashboard
 
-### Test Coverage
-- **API Testing**: Complete endpoint validation with Playwright
-- **Performance Testing**: Response time, throughput, and concurrency testing
-- **Security Testing**: XSS, injection, authentication, and vulnerability scanning
-- **Integration Testing**: End-to-end workflow validation
-- **Multi-browser Testing**: Chromium, Firefox, and WebKit support
-- **CI/CD Integration**: Automated testing in GitHub Actions
+The web dashboard shows:
 
-## 📁 Project Structure
+- **Live arbitrage opportunities** sorted by profit %
+- **Bet breakdown** — which outcome to bet at which sportsbook
+- **Stake calculator** — enter your bankroll and see exact dollar amounts per leg
+- **Sport filters** — focus on NFL, NBA, MLB, or NHL
+- **Auto-refresh** — odds update every 5 minutes (configurable)
+- **API usage tracker** — see how many requests remain this month
+
+## Configuration
+
+All settings live in `.env` (see `.env.example` for docs):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ODDS_API_KEY` | — | Your API key from the-odds-api.com |
+| `ODDS_FORMAT` | `american` | `american`, `decimal`, or `iso` |
+| `MARKETS` | `h2h` | `h2h` (moneyline), `spreads`, `totals` |
+| `REGIONS` | `us,us2` | Bookmaker regions to include |
+| `MIN_PROFIT_PCT` | `0.0` | Minimum arb profit % to display |
+| `REFRESH_INTERVAL` | `300` | Seconds between auto-refreshes (0 = manual) |
+| `HOST` | `127.0.0.1` | Server bind address |
+| `PORT` | `8000` | Server port |
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET`  | `/` | Web dashboard |
+| `GET`  | `/api/arbitrage` | Current live arbitrage opportunities |
+| `GET`  | `/api/arbitrage/history` | Historical arb opportunities |
+| `GET`  | `/api/odds?sport=NFL` | Latest odds snapshot |
+| `POST` | `/api/refresh` | Manually trigger odds refresh |
+| `GET`  | `/api/status` | App status, config, API usage |
+| `GET`  | `/api/sports` | Configured sports |
+
+## Understanding Arbitrage
+
+An arbitrage opportunity exists when different sportsbooks disagree on odds enough that you can cover all outcomes and guarantee profit.
+
+**Example:** Team A vs Team B moneyline
+
+| Outcome | Book | American Odds | Implied Prob |
+|---------|------|:------------:|:------------:|
+| Team A  | BookA | +150 | 40.0% |
+| Team B  | BookB | +120 | 45.45% |
+| **Total** | | | **85.45%** |
+
+Since 85.45% < 100%, this is an arb. Profit = `(1/0.8545 - 1) = 17.03%`.
+
+On a $100 bankroll:
+- Bet $46.81 on Team A at BookA (+150)
+- Bet $53.19 on Team B at BookB (+120)
+- **Guaranteed return ≈ $117.03** no matter who wins
+
+## Project Structure
 
 ```
 sports/
-├── models/                     # Pydantic data models
-│   └── __init__.py
-├── shared/                     # Common utilities
-│   └── utils.py
-├── sports_data_ingestion/      # Data collection function
+├── app/
 │   ├── __init__.py
-│   └── function.json
-├── game_predictor/             # ML prediction function
-│   ├── __init__.py
-│   └── function.json
-├── get_predictions/            # Predictions API
-│   ├── __init__.py
-│   └── function.json
-├── get_team_stats/             # Team statistics API
-│   ├── __init__.py
-│   └── function.json
-├── scheduled_data_sync/        # Automated sync function
-│   ├── __init__.py
-│   └── function.json
-├── infra/                      # Terraform infrastructure
-│   ├── main.tf
-│   ├── outputs.tf
-│   └── main.tfvars.json
-├── scripts/                    # Deployment and utility scripts
-│   ├── deploy.sh
-│   ├── dev-setup.sh
-│   ├── generate_sample_data.py
-│   └── test_api.py
-├── requirements.txt            # Python dependencies
-├── host.json                   # Functions host configuration
-├── local.settings.json.template # Local settings template
-└── README.md                   # This file
+│   ├── main.py            # FastAPI app + routes
+│   ├── config.py          # Settings from .env
+│   ├── database.py        # SQLite persistence
+│   ├── models.py          # Pydantic data models
+│   ├── odds_client.py     # The Odds API client
+│   ├── arbitrage.py       # Arbitrage detection engine
+│   ├── scheduler.py       # Background refresh loop
+│   └── templates/
+│       └── dashboard.html # Web dashboard (HTML/CSS/JS)
+├── data/                  # SQLite database (auto-created)
+├── .env                   # Your local config
+├── .env.example           # Config documentation
+├── Dockerfile             # Container image definition
+├── docker-compose.yml     # One-command Docker startup
+├── .dockerignore
+├── requirements.txt
+├── run.py                 # Entry point
+└── README.md
 ```
 
-## 🔐 Security
+## Tips
 
-### Authentication
-- **Managed Identity**: Used for Azure service authentication
-- **Key Vault**: Secure storage for all secrets and API keys
-- **RBAC**: Proper role assignments for Cosmos DB access
+- **Arbs are rare and fleeting** — they typically last seconds to minutes before books adjust
+- **Start with `h2h` (moneyline)** — simplest market with clearest arb math
+- **Add `spreads,totals`** to `MARKETS` in `.env` for more opportunities
+- **Lower `MIN_PROFIT_PCT`** to see more (smaller) opportunities
+- **Watch your API quota** — 500 free requests/month ≈ 16/day ≈ 1 every 90 min
 
-### Best Practices
-- No hardcoded secrets in code
-- Minimal required permissions
-- Encrypted connections to all services
-- Application Insights for security monitoring
+## License
 
-## 📈 Monitoring
-
-### Application Insights
-- Function execution metrics
-- API response times
-- Error rates and exceptions
-- Custom prediction accuracy metrics
-
-### Alerts
-- Function failures
-- High API latency
-- Low prediction confidence trends
-- Data ingestion failures
-
-## 🚀 Performance
-
-### Optimization Features
-- Async/await patterns for all I/O operations
-- Connection pooling for Cosmos DB
-- Retry logic with exponential backoff
-- Efficient data models with Pydantic validation
-
-### Scaling
-- Azure Functions automatic scaling
-- Cosmos DB request unit optimization
-- Connection string caching
-- Batch processing for large datasets
-
-## 🛠️ Development
-
-### Adding New Sports
-1. Extend `SportType` enum in `models/__init__.py`
-2. Add sport-specific data parsing in data ingestion function
-3. Update ML features for the new sport
-4. Add sport-specific validation rules
-
-### Improving ML Models
-1. Implement new feature extraction in `shared/utils.py`
-2. Update prediction logic in `game_predictor/__init__.py`
-3. Add model training scripts in `scripts/`
-4. Update confidence calculation algorithms
-
-### Adding New APIs
-1. Create new function directory with `__init__.py` and `function.json`
-2. Add route to API endpoints
-3. Update Terraform configuration if needed
-4. Add tests to `test_api.py`
-
-## 📚 Documentation
-
-### API Documentation
-- Swagger/OpenAPI documentation available at function app URL
-- Interactive API testing via Azure Functions portal
-- Postman collection available in `docs/` directory
-
-### Code Documentation
-- Docstrings for all functions and classes
-- Type hints throughout the codebase
-- Comprehensive error handling documentation
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Update documentation
-6. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🆘 Support
-
-### Common Issues
-
-**Cosmos DB Connection Errors**
-- Verify connection string in Key Vault
-- Check managed identity permissions
-- Ensure Cosmos DB is in the same region
-
-**Function App Deployment Failures**
-- Check Python version compatibility
-- Verify all dependencies in requirements.txt
-- Review Application Insights logs
-
-**Low Prediction Accuracy**
-- Increase historical data volume
-- Update ML model parameters
-- Review feature selection
-
-### Getting Help
-- Check Application Insights for detailed error logs
-- Review Azure Function App logs in the portal
-- Use the test scripts to isolate issues
-- Check the GitHub Issues page for known problems
-
-## 🔮 Roadmap
-
-### Upcoming Features
-- Real-time streaming predictions
-- Advanced ML models (neural networks)
-- Multi-sport tournament predictions
-- Social media sentiment analysis
-- Mobile app integration
-
-### Performance Improvements
-- Redis caching layer
-- GraphQL API endpoints
-- Serverless SQL for analytics
-- Edge deployment for global access
-- **Azure Storage**: Blob storage for ML models and large datasets
-
-## Features
-
-- Real-time sports data ingestion from multiple APIs
-- Data cleaning and aggregation
-- ML-powered game outcome predictions
-- Confidence scoring for predictions
-- RESTful API for accessing predictions
-
-## Functions
-
-### Data Ingestion
-- `sports_data_ingestion`: Scheduled function to collect sports data
-- `game_schedule_sync`: Sync upcoming game schedules
-
-### Data Processing
-- `data_cleaner`: Clean and normalize sports data
-- `data_aggregator`: Aggregate historical performance data
-
-### ML Predictions
-- `game_predictor`: Generate predictions for upcoming games
-- `model_trainer`: Retrain ML models with new data
-
-### API Endpoints
-- `get_predictions`: HTTP endpoint to retrieve predictions
-- `get_team_stats`: HTTP endpoint for team statistics
-
-## Setup
-
-1. Install dependencies: `pip install -r requirements.txt`
-2. Configure environment variables (see `.env.example`)
-3. Deploy infrastructure: `azd up`
-4. Deploy functions: `func azure functionapp publish <function-app-name>`
-
-## Environment Variables
-
-- `COSMOS_DB_ENDPOINT`: Cosmos DB endpoint URL
-- `SPORTS_API_KEY`: API key for sports data service
-- `ML_WORKSPACE_NAME`: Azure ML workspace name
-- `STORAGE_ACCOUNT_NAME`: Azure Storage account name
-
-## Development
-
-Run locally: `func start`
+MIT
