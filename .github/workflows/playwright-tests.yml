@@ -1,0 +1,310 @@
+name: Playwright Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to test against'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      test_type:
+        description: 'Type of tests to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - api
+        - performance
+        - security
+        - integration
+
+jobs:
+  test:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: tests/package-lock.json
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install Python dependencies
+      run: |
+        pip install -r requirements.txt
+
+    - name: Install Azure Functions Core Tools
+      run: |
+        curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg
+        sudo mv microsoft.gpg /etc/apt/trusted.gpg.d/microsoft.gpg
+        sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-$(lsb_release -cs)-prod $(lsb_release -cs) main" > /etc/apt/sources.list.d/dotnetdev.list'
+        sudo apt-get update
+        sudo apt-get install azure-functions-core-tools-4
+
+    - name: Install test dependencies
+      working-directory: tests
+      run: npm ci
+
+    - name: Install Playwright Browsers
+      working-directory: tests
+      run: npx playwright install --with-deps ${{ matrix.browser }}
+
+    - name: Start Azure Functions (for local testing)
+      if: github.event.inputs.environment == '' || github.event.inputs.environment == 'local'
+      run: |
+        func start &
+        sleep 30
+      env:
+        AzureWebJobsStorage: UseDevelopmentStorage=true
+        FUNCTIONS_WORKER_RUNTIME: python
+
+    - name: Wait for service to be ready
+      if: github.event.inputs.environment == '' || github.event.inputs.environment == 'local'
+      run: |
+        timeout 60 bash -c 'until curl -s http://localhost:7071/api/health; do sleep 2; done'
+
+    - name: Run Playwright tests
+      working-directory: tests
+      run: |
+        TEST_TYPE="${{ github.event.inputs.test_type || 'all' }}"
+        ENVIRONMENT="${{ github.event.inputs.environment || 'local' }}"
+        
+        # Set environment URL
+        case $ENVIRONMENT in
+          staging)
+            export FUNCTION_APP_URL="${{ secrets.STAGING_FUNCTION_APP_URL }}"
+            ;;
+          production)
+            export FUNCTION_APP_URL="${{ secrets.PRODUCTION_FUNCTION_APP_URL }}"
+            ;;
+          *)
+            export FUNCTION_APP_URL="http://localhost:7071"
+            ;;
+        esac
+        
+        # Run tests
+        npx playwright test \
+          --project=${{ matrix.browser }} \
+          --workers=2 \
+          --timeout=30000 \
+          $([ "$TEST_TYPE" != "all" ] && echo "e2e/${TEST_TYPE}-tests.spec.js" || echo "")
+      env:
+        CI: true
+        PLAYWRIGHT_HTML_REPORT: test-results/html-report
+        PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/results.json
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-results-${{ matrix.browser }}
+        path: tests/test-results/
+        retention-days: 30
+
+    - name: Upload HTML report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-report-${{ matrix.browser }}
+        path: tests/test-results/html-report/
+        retention-days: 30
+
+    - name: Comment PR with test results
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const path = 'tests/test-results/results.json';
+          
+          if (fs.existsSync(path)) {
+            const results = JSON.parse(fs.readFileSync(path, 'utf8'));
+            
+            const summary = `
+            ## 🎭 Playwright Test Results (${{ matrix.browser }})
+            
+            | Metric | Value |
+            |--------|-------|
+            | Total Tests | ${results.stats.total} |
+            | Passed | ${results.stats.passed} ✅ |
+            | Failed | ${results.stats.failed} ❌ |
+            | Skipped | ${results.stats.skipped} ⏭️ |
+            | Duration | ${Math.round(results.stats.duration / 1000)}s |
+            
+            ${results.stats.failed > 0 ? '### ❌ Failed Tests\n' + 
+              results.suites.flatMap(suite => 
+                suite.specs.flatMap(spec => 
+                  spec.tests.filter(test => test.status === 'failed')
+                    .map(test => `- ${test.title}`)
+                )
+              ).join('\n') : '### ✅ All tests passed!'}
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });
+          }
+
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'schedule'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run security tests
+      working-directory: tests
+      run: |
+        npm ci
+        npx playwright install chromium
+        npx playwright test e2e/security-tests.spec.js --project=chromium
+      env:
+        FUNCTION_APP_URL: ${{ secrets.STAGING_FUNCTION_APP_URL }}
+
+    - name: Security report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-test-results
+        path: tests/test-results/
+
+  performance-monitoring:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'schedule'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: tests/package-lock.json
+
+    - name: Install dependencies
+      working-directory: tests
+      run: npm ci
+
+    - name: Install Playwright
+      working-directory: tests
+      run: npx playwright install chromium
+
+    - name: Run performance tests
+      working-directory: tests
+      run: |
+        npx playwright test e2e/performance-tests.spec.js \
+          --project=chromium \
+          --workers=1 \
+          --timeout=60000
+      env:
+        FUNCTION_APP_URL: ${{ secrets.PRODUCTION_FUNCTION_APP_URL }}
+
+    - name: Upload performance results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: performance-monitoring-results
+        path: tests/test-results/
+
+    - name: Create performance issue
+      if: failure()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: '🚨 Performance Test Failure - ' + new Date().toISOString().split('T')[0],
+            body: `
+            Performance tests failed during scheduled monitoring.
+            
+            **Timestamp:** ${new Date().toISOString()}
+            **Environment:** Production
+            **Workflow:** ${context.workflow}
+            **Run:** ${context.runNumber}
+            
+            Please investigate the performance regression and take appropriate action.
+            
+            [View workflow run](${context.payload.repository.html_url}/actions/runs/${context.runId})
+            `,
+            labels: ['performance', 'monitoring', 'urgent']
+          });
+
+  test-summary:
+    runs-on: ubuntu-latest
+    needs: [test, security-scan]
+    if: always()
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      
+    - name: Generate consolidated report
+      run: |
+        echo "# 🎭 Playwright Test Summary" > test-summary.md
+        echo "" >> test-summary.md
+        echo "## Test Results by Browser" >> test-summary.md
+        echo "" >> test-summary.md
+        
+        for browser in chromium firefox webkit; do
+          if [ -d "playwright-results-$browser" ]; then
+            echo "### $browser" >> test-summary.md
+            if [ -f "playwright-results-$browser/results.json" ]; then
+              node -e "
+                const fs = require('fs');
+                const results = JSON.parse(fs.readFileSync('playwright-results-$browser/results.json'));
+                console.log('| Metric | Value |');
+                console.log('|--------|-------|');
+                console.log('| Total | ' + results.stats.total + ' |');
+                console.log('| Passed | ' + results.stats.passed + ' |');
+                console.log('| Failed | ' + results.stats.failed + ' |');
+                console.log('| Duration | ' + Math.round(results.stats.duration / 1000) + 's |');
+              " >> test-summary.md
+            fi
+            echo "" >> test-summary.md
+          fi
+        done
+        
+        cat test-summary.md
+
+    - name: Upload summary
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-summary
+        path: test-summary.md

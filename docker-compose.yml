@@ -1,0 +1,25 @@
+# ── Sports Arbitrage Finder ───────────────────────────────────────────
+# Usage:
+#   docker compose up              # start (foreground)
+#   docker compose up -d           # start (background)
+#   docker compose down            # stop
+#   docker compose logs -f         # tail logs
+
+services:
+  arbitrage:
+    build: .
+    container_name: sports-arbitrage
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      # Persist SQLite database across container restarts
+      - arbitrage-data:/app/data
+    env_file:
+      - .env
+    environment:
+      # Bind to all interfaces inside the container (required for port mapping)
+      - HOST=0.0.0.0
+
+volumes:
+  arbitrage-data:

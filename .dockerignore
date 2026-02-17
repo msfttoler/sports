@@ -1,0 +1,31 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*.egg-info
+venv/
+.venv/
+
+# Local environment
+.env
+
+# Database (rebuilt at runtime)
+data/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CI / GitHub
+.github/
+
+# Docs
+README.md
+DEPLOYMENT.md
