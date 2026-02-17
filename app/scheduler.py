@@ -32,7 +32,14 @@ async def refresh_odds() -> RefreshResult:
 
     client = OddsClient()
     try:
-        events, usage = await client.fetch_all_sports()
+        # Only fetch major US sports to conserve API quota
+        # (free tier = 500 requests/month)
+        major_sports = [
+            settings.SPORT_KEYS[k]
+            for k in ("NBA", "NFL", "NHL", "MLB")
+            if k in settings.SPORT_KEYS
+        ]
+        events, usage = await client.fetch_all_sports(sport_keys=major_sports)
         result.events_fetched = len(events)
         result.sports_checked = list(settings.SPORT_KEYS.keys())
 

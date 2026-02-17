@@ -25,6 +25,12 @@ class Settings:
         "NBA": "basketball_nba",
         "MLB": "baseball_mlb",
         "NHL": "icehockey_nhl",
+        "NCAAF": "americanfootball_ncaaf",
+        "NCAAM": "basketball_ncaab",
+        "EPL": "soccer_epl",
+        "LA LIGA": "soccer_spain_la_liga",
+        "SERIE A": "soccer_italy_serie_a",
+        "UCL": "soccer_uefa_champs_league",
     }
 
     # Odds format: "american" | "decimal" | "iso"
@@ -39,8 +45,8 @@ class Settings:
     # Minimum arbitrage profit % to surface (e.g. 0.5 means 0.5%)
     MIN_PROFIT_PCT: float = float(os.getenv("MIN_PROFIT_PCT", "0.0"))
 
-    # Auto-refresh interval in seconds (0 = manual only)
-    REFRESH_INTERVAL: int = int(os.getenv("REFRESH_INTERVAL", "300"))
+    # Auto-refresh interval in seconds (0 = manual only, 14400 = 4 hours)
+    REFRESH_INTERVAL: int = int(os.getenv("REFRESH_INTERVAL", "14400"))
 
     # SQLite database path
     DB_PATH: str = os.getenv("DB_PATH", str(Path(__file__).resolve().parent.parent / "data" / "arbitrage.db"))
