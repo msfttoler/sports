@@ -290,6 +290,48 @@ async def api_injuries(sport: str = Query("NBA")):
     }
 
 
+@app.get("/api/live")
+async def api_live(sport: str = Query("NBA")):
+    """Live scoreboard with scores, predictions, and watch links."""
+    sport_key = settings.SPORT_KEYS.get(sport.upper(), sport)
+    espn = ESPNClient()
+    try:
+        scoreboard = await espn.get_scoreboard(sport_key)
+        team_stats = await espn.get_team_stats(sport_key)
+    finally:
+        await espn.close()
+
+    from app.predictor import predict_game as pg
+    sp_map = {"americanfootball_nfl": "nfl", "basketball_nba": "nba", "baseball_mlb": "mlb",
+              "icehockey_nhl": "nhl", "americanfootball_ncaaf": "college-football",
+              "basketball_ncaab": "mens-college-basketball", "soccer_epl": "soccer",
+              "soccer_spain_la_liga": "soccer", "soccer_italy_serie_a": "soccer",
+              "soccer_uefa_champs_league": "soccer"}
+    sp = sp_map.get(sport_key, "sports")
+    games = []
+    for g in scoreboard:
+        home, away = g["home_team"], g["away_team"]
+        eid = g.get("event_id", "")
+        espn_link = f"https://www.espn.com/{sp}/game/_/gameId/{eid}" if eid else "https://www.espn.com/watch/"
+        pred_data = None
+        if team_stats:
+            ev = Event(id=eid, sport_key=sport_key, sport_title=sport.upper(),
+                       home_team=home, away_team=away, commence_time=g.get("commence_time", ""))
+            pred = pg(ev, team_stats)
+            if pred:
+                pred_data = {"winner": pred.predicted_winner, "home_prob": pred.home_win_prob,
+                             "away_prob": pred.away_win_prob, "confidence": pred.confidence,
+                             "confidence_label": pred.confidence_label, "spread": pred.spread_prediction}
+        games.append({"event_id": eid, "home_team": home, "away_team": away,
+                      "home_score": g.get("home_score", "0"), "away_score": g.get("away_score", "0"),
+                      "status": g.get("status", ""), "completed": g.get("completed", False),
+                      "commence_time": g.get("commence_time", ""),
+                      "espn_link": espn_link, "youtube_tv_link": "https://tv.youtube.com/",
+                      "prediction": pred_data})
+    return {"games": games, "count": len(games), "sport": sport.upper(),
+            "timestamp": datetime.now(UTC).isoformat()}
+
+
 # ── Bet Tracker routes ────────────────────────────────────────────────
 
 @app.post("/api/bets")

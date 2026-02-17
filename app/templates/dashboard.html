@@ -72,6 +72,25 @@ tr{transition:background .15s}tr:hover{background:var(--glass)}
 .bet-row:hover{background:var(--glass)}
 .bet-actions button{font-size:.68rem;padding:.2rem .45rem;margin-left:.25rem;border-radius:6px;border:none;cursor:pointer;font-weight:700}
 .bw{background:var(--green);color:#000}.bl{background:var(--red);color:#fff}.bpush{background:var(--yellow);color:#000}
+/* Live scoreboard */
+.live-game{backdrop-filter:blur(12px);background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1rem 1.2rem;margin-bottom:.7rem;transition:all .2s}
+.live-game:hover{border-color:var(--accent);box-shadow:0 4px 20px var(--glow)}
+.live-game.in-progress{border-left:3px solid var(--red)}
+.live-game.completed{border-left:3px solid var(--dim);opacity:.75}
+.live-score{display:flex;align-items:center;gap:1.5rem;margin:.5rem 0}
+.live-team{flex:1;text-align:center}
+.live-team-name{font-size:.82rem;font-weight:700}
+.live-team-score{font-size:2rem;font-weight:800;margin-top:.1rem}
+.live-vs{font-size:.72rem;color:var(--dim);font-weight:600}
+.live-status{text-align:center;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.live-pred{display:flex;justify-content:space-between;padding:.45rem .7rem;background:var(--glass);border-radius:8px;margin-top:.4rem;font-size:.78rem;flex-wrap:wrap;gap:.3rem}
+.live-links{display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap}
+.live-links a{text-decoration:none;font-size:.72rem;padding:.25rem .6rem;border-radius:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text);transition:.2s;font-weight:600}
+.live-links a:hover{border-color:var(--accent);color:var(--accent)}
+.live-links a.espn{background:rgba(240,82,82,0.12);border-color:rgba(240,82,82,0.3);color:var(--red)}
+.live-links a.espn:hover{background:rgba(240,82,82,0.25)}
+.pulse{display:inline-block;width:8px;height:8px;background:var(--red);border-radius:50%;margin-right:.3rem;animation:pls 1.5s infinite}
+@keyframes pls{0%,100%{opacity:1}50%{opacity:.3}}
 /* Modal */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(8px);z-index:900;align-items:center;justify-content:center}
 .modal-bg.open{display:flex}
@@ -114,12 +133,14 @@ tr{transition:background .15s}tr:hover{background:var(--glass)}
     <div class="tab" onclick="showTab('valuebets',this)">💰 Value Bets</div>
     <div class="tab" onclick="showTab('arbitrage',this)">⚖️ Arbitrage</div>
     <div class="tab" onclick="showTab('tracker',this);loadTracker()">📈 Tracker</div>
+    <div class="tab" onclick="showTab('live',this);loadLive()">🔴 Live</div>
   </div>
   <div id="predictions" class="panel active"><div class="cards" id="predStats"></div><div id="predList"></div></div>
   <div id="standings" class="panel"><div id="standingsTable"></div></div>
   <div id="valuebets" class="panel"><div class="cards" id="vbStats"></div><div id="vbList"></div></div>
   <div id="arbitrage" class="panel"><div class="cards" id="arbStats"></div><div id="arbList"></div></div>
   <div id="tracker" class="panel"><div class="cards" id="trackerStats"></div><div style="margin-bottom:1rem;display:flex;gap:.5rem"><button class="primary" onclick="openBetModal()">+ Log Bet</button><button onclick="checkScores()">🔄 Check Scores</button></div><div id="trackerList" style="background:var(--surface);border-radius:14px;overflow:hidden"></div></div>
+  <div id="live" class="panel"><div class="cards" id="liveStats"></div><div id="liveList"></div></div>
 </div>
 <!-- Bet Modal -->
 <div class="modal-bg" id="betModal">
@@ -289,6 +310,52 @@ async function loadTracker(){
     el.innerHTML=html}catch(e){el.innerHTML='<div class="empty">Error</div>'}
 }
 function loadAll(){loadPredictions();loadStandings();loadArbitrage()}
+// ── LIVE SCOREBOARD ───────────────────────────────────────
+async function loadLive(){
+  const el=document.getElementById('liveList'),st=document.getElementById('liveStats');
+  if(!el)return;
+  el.innerHTML='<div class="empty"><span class="spin"></span> Loading live scores...</div>';
+  try{
+    const r=await fetch('/api/live?sport='+currentSport);
+    const d=await r.json();
+    const games=d.games||[];
+    const live=games.filter(g=>!g.completed&&g.status&&g.status.includes('PROGRESS')).length;
+    const done=games.filter(g=>g.completed).length;
+    st.innerHTML='<div class="card"><div class="lb">Games Today</div><div class="vl">'+games.length+'</div></div>'+
+      '<div class="card"><div class="lb"><span class="pulse"></span>Live Now</div><div class="vl" style="color:var(--red)">'+live+'</div></div>'+
+      '<div class="card"><div class="lb">Final</div><div class="vl">'+done+'</div></div>'+
+      '<div class="card"><div class="lb">Upcoming</div><div class="vl">'+(games.length-live-done)+'</div></div>';
+    if(!games.length){el.innerHTML='<div class="empty"><h2>No games today</h2><p>Check back on game day for live scores.</p></div>';return}
+    el.innerHTML=games.map(function(g){
+      var isLive=!g.completed&&g.status&&g.status.indexOf('PROGRESS')>=0;
+      var isDone=g.completed;
+      var cls=isLive?'in-progress':isDone?'completed':'';
+      var statusText=isDone?'FINAL':isLive?'<span class="pulse"></span>LIVE':fmt(g.commence_time)||'SCHEDULED';
+      var pred=g.prediction;
+      var predHtml='';
+      if(pred){
+        var pClr=({'lock':'var(--green)','strong':'var(--blue)','lean':'var(--yellow)'})[pred.confidence_label]||'var(--dim)';
+        predHtml='<div class="live-pred"><span>AI: <b style="color:'+pClr+'">'+pred.winner+'</b> ('+pct(Math.max(pred.home_prob,pred.away_prob))+')</span><span>'+pred.confidence_label.toUpperCase()+' '+pct(pred.confidence)+'</span>'+(pred.spread?'<span>Line: '+(pred.spread>0?'+':'')+pred.spread+'</span>':'')+'</div>';
+      }
+      return '<div class="live-game '+cls+'">'+
+        '<div class="live-status">'+statusText+'</div>'+
+        '<div class="live-score">'+
+          '<div class="live-team"><div class="live-team-name">'+g.away_team+'</div><div class="live-team-score">'+g.away_score+'</div></div>'+
+          '<div class="live-vs">@</div>'+
+          '<div class="live-team"><div class="live-team-name">'+g.home_team+'</div><div class="live-team-score">'+g.home_score+'</div></div>'+
+        '</div>'+
+        predHtml+
+        '<div class="live-links">'+
+          '<a href="'+g.espn_link+'" target="_blank" rel="noopener" class="espn">📺 ESPN Gamecast</a>'+
+          '<a href="'+g.youtube_tv_link+'" target="_blank" rel="noopener">▶ YouTube TV</a>'+
+          '<a href="https://www.sling.com/" target="_blank" rel="noopener">📡 Sling</a>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+  }catch(e){el.innerHTML='<div class="empty"><h2>Error</h2><p>'+e.message+'</p></div>'}
+}
+setInterval(function(){if(document.getElementById('live')&&document.getElementById('live').classList.contains('active'))loadLive()},30000);
+
 loadAll();setInterval(loadAll,120000);
 </script>
 </body>
