@@ -124,6 +124,45 @@ FEATURE_WEIGHTS: dict[str, float] = {
     "away_injury_impact": 0.8,
 }
 
+FEATURE_DESCRIPTIONS: dict[str, str] = {
+    "win_pct_diff": "Overall win percentage differential",
+    "home_home_win_pct": "Home team's home win rate",
+    "away_away_win_pct": "Away team's road win rate",
+    "venue_edge": "Home-court advantage based on home/away splits",
+    "ppg_diff": "Points per game differential",
+    "opp_ppg_diff": "Defensive strength differential (points allowed)",
+    "point_diff_diff": "Net point differential comparison",
+    "streak_diff": "Current win/loss streak momentum",
+    "last5_diff": "Last 5 games form comparison",
+    "strength_diff": "Composite team strength rating",
+    "home_field": "Baseline home-field advantage",
+    "injury_diff": "Injury impact differential (healthier team favored)",
+    "home_injury_impact": "Home team injury penalty",
+    "away_injury_impact": "Away team injury penalty (benefits home)",
+}
+
+
+def _build_feature_explanations(features: dict[str, float]) -> list[dict]:
+    """Build sorted list of feature explanations for the UI."""
+    explanations = []
+    for name, value in features.items():
+        weight = FEATURE_WEIGHTS.get(name, 0)
+        impact = value * weight
+        explanations.append({
+            "name": name,
+            "value": round(value, 4),
+            "weight": weight,
+            "impact": round(impact, 4),
+            "abs_impact": abs(impact),
+            "direction": "home" if impact > 0 else "away" if impact < 0 else "neutral",
+            "description": FEATURE_DESCRIPTIONS.get(name, name.replace("_", " ").title()),
+        })
+    explanations.sort(key=lambda x: x["abs_impact"], reverse=True)
+    # Remove the sort helper
+    for e in explanations:
+        del e["abs_impact"]
+    return explanations
+
 
 def predict_game(
     event: Event,
@@ -191,6 +230,17 @@ def predict_game(
 
     reasoning = _build_reasoning(event, home, away, features, home_win_prob)
 
+    # Build detailed feature explanations for the UI
+    feature_explanations = _build_feature_explanations(features)
+
+    # Build injury detail dicts
+    home_inj_dict = None
+    away_inj_dict = None
+    if home_injuries:
+        home_inj_dict = home_injuries.to_dict() if hasattr(home_injuries, "to_dict") else None
+    if away_injuries:
+        away_inj_dict = away_injuries.to_dict() if hasattr(away_injuries, "to_dict") else None
+
     return GamePrediction(
         event_id=event.id,
         sport_key=event.sport_key,
@@ -211,6 +261,9 @@ def predict_game(
         cover_label=cover_label_str,
         cover_reasoning=cover_reasoning,
         features=features,
+        feature_explanations=feature_explanations,
+        home_injuries=home_inj_dict,
+        away_injuries=away_inj_dict,
         reasoning=reasoning,
         model_version=MODEL_VERSION,
     )

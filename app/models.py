@@ -154,6 +154,9 @@ class GamePrediction(BaseModel):
     cover_label: str | None = None  # "lock", "strong", "lean", "toss-up", "fade"
     cover_reasoning: str | None = None
     features: dict[str, float] = Field(default_factory=dict)
+    feature_explanations: list[dict] = Field(default_factory=list)  # [{name, value, weight, impact, description}]
+    home_injuries: dict | None = None  # {summary, out: [...], impact_score}
+    away_injuries: dict | None = None
     reasoning: str = ""
     model_version: str = "v1.0"
     predicted_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
